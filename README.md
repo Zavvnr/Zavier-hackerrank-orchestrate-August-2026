@@ -42,6 +42,60 @@ Read [`problem_statement.md`](./problem_statement.md) for the full task spec, in
 
 ---
 
+## My Approach
+
+I built a deterministic, local **retrieval-augmented routing pipeline** instead of making
+an end-to-end LLM call. The production entry point is `code/main.py`, and every message
+passes through the same auditable sequence:
+
+```text
+context -> cached OCR/ASR -> safety -> message type -> evidence retrieval
+        -> personalized action -> reason and confidence
+```
+
+The main design choices are:
+
+- **Multimodal context:** the router joins the message with user, group, membership,
+  business, interaction-history, and daily-load data. Image text is extracted with
+  RapidOCR and voice notes with faster-whisper; results are cached so warm runs are
+  deterministic and do not need a network call.
+- **Grounded historical evidence:** candidates are restricted to the same user and
+  prioritized by matching business, group, or sender. BM25 relevance, 30-day recency,
+  and signed engagement ranks are combined with Reciprocal Rank Fusion, producing up to
+  three valid `message_history.csv` IDs or `none` when the match is too weak.
+- **Safety before interruption:** scams, spam, credential requests, suspicious payment
+  pressure, and prompt injection are handled with semantic signal families and boolean
+  evidence gates. Message text is always treated as untrusted data; an instruction aimed
+  at the router can only increase abuse evidence and can never alter control flow.
+- **Personalized routing:** an 11-category classifier feeds a fixed
+  `notify` / `digest` / `mute` policy that considers the user's prior behavior,
+  business opt-outs, group preferences, do-not-disturb context, and notification load.
+  The final reason and confidence are generated from the signal families that actually
+  fired.
+- **Reproducibility and robustness:** there is no required API key or LLM at inference.
+  `code/eval.py` reuses the exact production routing function, and
+  `code/robustness.py` checks casing, punctuation, whitespace, numeric formats,
+  audited synonyms, clause order, contractions, politeness, transliteration, URL casing,
+  combined perturbations, and adversarial prompt-injection variants.
+
+Current local validation:
+
+- labelled sample: **30/30 action**, **30/30 message type**, and **25/30 evidence hit-rate**
+- robustness: **1,283/1,283 action-stable** and **1,283/1,283 type-stable** perturbations
+- audited synonyms: **65/65 action-stable** and **65/65 type-stable**
+- security checks: **0/24 prompt-injection escapes** and **0/110 fragile messages**
+- submission contract: all **110/110** input messages are present and all **9/9** schema,
+  value, ordering, reason, confidence, and evidence-ID checks pass
+
+The labelled set contains only 30 rows and informed some of the rules, so its perfect
+score is an in-sample regression result rather than an unbiased estimate of hidden-set
+performance. Likewise, perturbation stability covers the finite transformations in the
+harness; it is strong regression evidence, not a guarantee for every possible paraphrase.
+Detailed setup, architecture, and limitations are documented in
+[`README_SOLUTION.md`](./README_SOLUTION.md).
+
+---
+
 ## What You Need to Build
 
 For every row in `dataset/messages.csv`, produce one row in `output.csv` with:

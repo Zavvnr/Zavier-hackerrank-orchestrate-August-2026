@@ -516,3 +516,20 @@ Codex [final]:
 Completed. The chronological transcript is saved at [chat_transcript.txt](C:/Users/zavie/OneDrive/Desktop/Zavier-hackerrank-orchestrate-August-2026/chat_transcript.txt). It contains all 7 supplied User/Claude Code exchanges first, followed by all 9 User messages and 34 visible Codex messages from this task (including this closing response).
 
 The external `log.txt` remains append-only and now includes a pointer to the compiled transcript. `README.md` and `README_SOLUTION.md` were not edited.
+
+User:
+Actually, add my approach on what I've built in README.md on top of the following section
+
+**## What You Need to Build**
+
+You may edit or delete the files below it, and add this to chat_transcript.txt as well
+
+Codex [commentary]:
+I’ll add an evidence-based “approach” section immediately above `## What You Need to Build`, using the implementation and validation artifacts already in the repo as the source of truth. I’ll keep the existing material below that heading unless a small consistency edit is actually needed, then append this exchange to `chat_transcript.txt` and the mandatory external audit log.
+
+Codex [final]:
+Added `## My Approach` immediately above `## What You Need to Build` in [README.md](C:/Users/zavie/OneDrive/Desktop/Zavier-hackerrank-orchestrate-August-2026/README.md). It documents the deterministic multimodal RAG pipeline, evidence retrieval, safety and prompt-injection handling, personalized policy, reproducibility, current validation results, and honest evaluation limits.
+
+I kept the existing material below that section. I also reran validation successfully: 30/30 action, 30/30 message type, 25/30 evidence, 1,283/1,283 perturbation stability, 65/65 audited synonym stability, 0/110 fragile messages, and 0/24 injection escapes.
+
+This exchange was appended to [chat_transcript.txt](C:/Users/zavie/OneDrive/Desktop/Zavier-hackerrank-orchestrate-August-2026/chat_transcript.txt) and the external append-only `log.txt`. `README_SOLUTION.md` was not edited.
