@@ -1,9 +1,15 @@
 # SUMMARY.md — Message Notification Router
 
 Author: CONCLUDER_ONE (concluding layer, Task 1; transcribed to disk by the orchestrator
-after a harness guard blocked the subagent's direct write). Status at time of writing:
-**loop 2 of 4 complete**. All numbers in §2 are quoted verbatim from a real run; nothing
+after a harness guard blocked the subagent's direct write). Current status:
+**loop 4 of 4 complete**. All evaluation numbers are quoted from real runs; nothing
 here is estimated.
+
+> **Loop 4 final update (2026-08-02).** Labelled eval remains **30/30 action, 30/30
+> message_type, 25/30 evidence**. The expanded robustness harness is now **1283/1283
+> action-stable and 1283/1283 type-stable**, with **0/24 injection escapes**. The original
+> synonym result is preserved separately from the audited result in §2b so measurement
+> cleanup is not presented as a model improvement.
 
 > **Loop 2 update (2026-08-02).** Four targeted fixes landed after the loop-1 write-up
 > below. Current eval: **action 30/30, message_type 30/30, evidence hit-rate 25/30**,
@@ -251,9 +257,58 @@ is probably the fairest signal of hidden-set behavior.
 
 ---
 
+## 2b. Loop 4 final results (current — supersedes §2 and §2a)
+
+The labelled evaluation did not move: action **1.000 (30/30)**, message type **1.000
+(30/30)**, evidence hit-rate **0.833 (25/30)**, and mean absolute confidence error
+**0.047**. These are in-sample checks, not a hidden-set estimate.
+
+The robustness progression is deliberately reported in stages:
+
+| Stage | Valid mutations | Action stable | Type stable | Audited synonym action/type |
+|---|---:|---:|---:|---:|
+| Loop-3 baseline, old 13-mutation harness | 1,111 | 1,089 (98.02%) | 1,070 (96.31%) | old table: 81/88 (92.05%) / 79/88 (89.77%) |
+| L4 measurement audit only, before classifier changes | 1,283 | 1,265 (98.60%) | 1,243 (96.88%) | 60/65 (92.31%) / 60/65 (92.31%) |
+| L4 final | 1,283 | **1,283 (100.00%)** | **1,283 (100.00%)** | **65/65 (100.00%) / 65/65 (100.00%)** |
+
+The synonym audit removed 13 generic pairs that were not reliably meaning-preserving.
+Examples include `free` ↔ `no cost` (availability versus price), `link` ↔ `URL`
+(relationship/verb versus web address), and `appointment` ↔ `booking` (medical event
+versus generic reservation). The legacy table remains a diagnostic-only control and is
+excluded from every headline score. The harness now also covers subordinate-clause order,
+contraction/expansion, politeness markers, and Romanized-Hindi spelling variants, and
+attributes every observed flip to safety, classifier, retrieval, and/or policy.
+
+Classifier changes encode semantic families, not rows: contact verbs, availability
+phrases, request verbs, scheduling verbs, numeric-word deadlines, whitespace normalization,
+and benign greeting prefixes. A sweep over all **560 non-empty texts** (102 target captions
++ 30 labelled samples + 412 history messages + 16 cached media transcripts) changed pattern
+coverage as follows: urgency **135→136**, direct ask **53→77**, explicit de-escalation
+**27→32**, event/scheduling **30→54**, greeting **21→21**. The shared promotion family
+remained **97→97** on the unperturbed corpus while gaining the general `price cut` / `price
+reduction` forms needed for synonym invariance. No previously benign target message became
+`urgent`; all 30 labelled actions and types remained correct.
+
+The production output was regenerated and independently checked: exact six-column schema,
+110 rows in input order, unique ids, allowed actions/types, bounded confidences, non-empty
+reasons, and valid evidence ids all pass (**9/9**). Two principled unlabelled predictions
+changed: an airport-pickup reschedule is now typed as an event, and a same-day school
+transport pickup request now notifies. Final distributions are notify **24**, digest **37**,
+mute **49**; type counts are business_update 10, scam 22, unknown 3, forward 6, urgent 18,
+greeting 5, personal 21, payment 3, promotion 14, event 5, spam 3. Consecutive generation
+runs were byte-identical (SHA-256
+`388929A017AAD041CF3AEFDCC2C8FE2AC7A8CC0BF77D76A1B28D380BD4809354`).
+
+Honest limit: 100% stability means only that all finite, deterministic mutations currently
+implemented by this harness held. The mutation families were informed by observed failures,
+so this is stronger regression evidence, not an unbiased guarantee about every paraphrase
+or the hidden evaluation set.
+
+---
+
 ## 3. Current situation
 
-**Loop 2 of 4 is complete.** The system is runnable end to end from the terminal, produces
+**Loop 4 of 4 is complete.** The system is runnable end to end from the terminal, produces
 a valid `output.csv` (9/9 submission-contract checks pass), requires no API keys, and needs
 no network access at inference time once the faster-whisper weights are cached locally.
 

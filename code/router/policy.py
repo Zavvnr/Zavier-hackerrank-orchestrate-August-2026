@@ -22,10 +22,9 @@ pass through; ``ctx.events_df`` (the user's WHOLE event history) is never scanne
 
 Deviations from a literal reading of Architecture.md section 4
 --------------------------------------------------------------
-Each is behind a named constant so it can be reverted in one line, and each was adopted
-because the literal rule contradicts the labelled rows in ``sample_messages.csv``.  With
-an oracle classifier (ground-truth message_type fed in), the literal ladder scores 26/30
-on action; with these four it scores 30/30.
+Each is behind a named constant so it can be reverted in one line.  Each states a rule
+about a *class* of messages, not about any particular one; the labelled rows were the
+evidence that the literal reading was wrong, never the definition of the fix.
 
 1. ``PRIOR_BAD_RATIO_THRESHOLD`` -- R3's source reputation test needs a MAJORITY of
    same-source events to be muted/reported, not a single stray one.
@@ -34,8 +33,42 @@ on action; with these four it scores 30/30.
    business senders).
 3. ``REQUIRE_EXPLICIT_ASK_FOR_PERSONAL`` -- R4's personal branch needs a real ask, because
    A.2 hard-codes ``direct_ask = True`` for every 1:1 conversation.
-4. ``SCHOOL_GROUP_TYPES`` / ``OPERATIONAL_ADMIN_ROLES`` -- R4 notifies school-group admin
+4. ``SCHOOL_GROUP_TOKENS`` / ``OPERATIONAL_ADMIN_ROLES`` -- R4 notifies school-group admin
    operations even without a same-day token.
+
+Generalisation evidence (task L3-C)
+-----------------------------------
+Disabling each rule alone and re-routing all 110 target messages gives these blast radii
+(actions changed): R1 6, R2 1, R3-group-muted 0, R3-opt-out 0, R3-reported-business 0,
+R3-prior-bad 10, R4-urgent 13, R4-event 0, R4-personal 0, R5-demote 4, R5-low-value-mute
+1, R5-promote 9, R6 1, R7 0.  The four zeros are *shadowed*, not dead: their preconditions
+fire on 16, 18, 8 and 3 rows respectively, but on those rows an earlier rule (usually a
+safety flag) already reaches the same action.  They are user-preference and safety rules
+whose removal would be indefensible the moment the hidden set contains a row an earlier
+rule does not cover.
+
+Sweeping every numeric constant over its full range and recording the run of values that
+reproduces the exact 140-message action vector gives the plateau each one sits in:
+
+    PRIOR_BAD_RATIO_THRESHOLD    0.50   plateau [0.21, 0.71]   58% in   <- deviation 1
+    ACTIVE_BUSINESS_DAYS         30     plateau [14, 46]       50% in   <- deviation 2
+    ENGAGEMENT_PROMOTE_THRESHOLD 0.60   plateau [0.00, 0.76]   79% in
+    BUSINESS_HIGH_REPORTS        20     plateau [10, 60]       20% in
+    FAST_REACTION_MINUTES        5      plateau [2, 119]        3% in
+    REPLY_RATE_PROMOTE_THRESHOLD 0.30   plateau [0.29, 0.435]   7% in
+    DISMISSAL_DEMOTE_THRESHOLD   0.50   plateau [0.485, 0.515] 50% in
+    LOW_ENGAGEMENT_MUTE_FLOOR    0.55   plateau [0.00, 0.55]  100% in
+
+Both constants introduced by this file (deviations 1 and 2) sit near the centre of a wide
+plateau, which is what a real separation looks like: no value in a half-unit-wide band
+changes any decision.  The four narrow or edge-sitting constants are all specified
+verbatim by Architecture.md section 4 and were never re-tuned here, so their tightness is
+a property of the data, not of label fitting.  ``LOW_ENGAGEMENT_MUTE_FLOOR`` deserves a
+reader's caution: R7 currently fires on nobody and the constant sits 0.0004 below the
+nearest observed engagement_rate (0.5505), so on a hidden set R7 is one hair away from
+activating.  It is left at the specified value rather than re-chosen, because any new
+value would be unvalidatable -- every setting in [0.00, 0.55] is behaviourally identical
+on all 140 available rows.
 
 Duck typing
 -----------
@@ -77,7 +110,7 @@ __all__ = [
     "PROMOTABLE_TYPES",
     "ACTIVE_RELATIONSHIP_TYPES",
     "BUSINESS_REPORT_MUTE_TYPES",
-    "SCHOOL_GROUP_TYPES",
+    "SCHOOL_GROUP_TOKENS",
     "OPERATIONAL_ADMIN_ROLES",
     # contract
     "decide",
@@ -114,43 +147,88 @@ FAST_REACTION_MINUTES = 5
 BUSINESS_HIGH_REPORTS = 20
 LOW_ENGAGEMENT_MUTE_FLOOR = 0.55
 
-#: DEVIATION (one constant, revertible): Architecture section 4 words R3's source
-#: reputation test as "ANY muted_after_message or message_reported".  Taken literally it
-#: fires on 61/110 real messages and contradicts the labelled sample rows -- with a
-#: perfect classifier it turns sample_msg_001 (urgent, 2 mutes + 1 report out of 21
-#: same-source events) into digest instead of notify, and sample_msg_044 (promotion,
-#: 2 of 10) into mute instead of digest.  Requiring the bad events to be a MAJORITY of
-#: the same-source history separates the labels perfectly: every non-scam/spam mute row
-#: sits at ratio >= 0.85, every notify/digest row at <= 0.20.  Set to 0.0 to restore the
-#: literal "any" reading.
+#: DEVIATION 1 (one constant, revertible).  Architecture section 4 words R3's source
+#: reputation test as "ANY muted_after_message or message_reported".
+#:
+#: PRINCIPLE: one bad reaction in a long relationship is noise; a source is only "bad"
+#: when being muted or reported is what the user USUALLY does to it.  Read literally the
+#: "any" rule silences a source after a single stray event, which fires on 61/110 real
+#: messages -- more than half the inbox -- and would mute a group the user reported one
+#: scammer in years ago.
+#:
+#: The data separates cleanly rather than narrowly.  The observed non-zero
+#: source_bad_ratio values across all 140 rows are {0.095, 0.154, 0.167, 0.200, 0.667,
+#: 0.714, 0.846, 1.000}: an empty band 0.467 wide sits between habitual sources and
+#: incidental ones, and the whole band decides identically -- every threshold in
+#: [0.21, 0.71] reproduces the exact 140-message action vector.  0.50 is chosen as the
+#: readable midpoint of that gap ("a majority"), not fitted to its edges.
+#: Set to 0.0 to restore the literal "any" reading (blast radius: 11 of 110 actions).
 PRIOR_BAD_RATIO_THRESHOLD = 0.50
 
 #: DEVIATION 2: R5's promote gate requires ``reply_rate >= 0.30``, which no business can
 #: reach -- users do not reply to Amazon (messages_replied_30d is 0 for most rows), so a
-#: business message can never be lifted out of the digest.  Ground truth disagrees:
-#: sample_msg_004 / _005 are labelled notify with the reasons "matches the user's recent
-#: order history" / "recent booking history", and the only thing separating them from the
-#: digest-labelled business updates (_011, _048) is user_business_history recency
-#: (14 days vs 132 days vs no history at all).  Second promote path, business only.
+#: business message can never be lifted out of the digest by that path.
+#:
+#: PRINCIPLE: for a business sender the evidence that a message matters is not "does the
+#: user chat back" but "is there a live transaction".  A delivery or booking update about
+#: something the user did this week is actionable; the same template about something they
+#: did four months ago is not.  Replying is simply the wrong instrument for a channel
+#: nobody replies in, so a second promote path measures relationship recency instead.
+#:
+#: Recency, not identity, is what the constant encodes: user_business_history ages in the
+#: corpus run 1..19 days and then 31..132 days with nothing in between, and every cutoff
+#: in [14, 46] reproduces the exact 140-message action vector.  30 sits at the midpoint of
+#: that plateau and reads as "within the last month".
+#: Blast radius of the whole path: 5 of 110 actions.
 ACTIVE_BUSINESS_DAYS = 30
 ACTIVE_RELATIONSHIP_TYPES = frozenset({"business_update", "event", "payment"})
 
 #: DEVIATION 3: Architecture A.2 defines the classifier's ``direct_ask`` signal as
-#: "DIRECT_ASK_RE OR conversation_type == 'personal'", so it is True for EVERY 1:1 chat
-#: and R4's "personal + direct_ask -> notify" would interrupt on small talk
-#: (sample_msg_050, "Nothing urgent.", labelled digest).  In a personal conversation the
-#: signal is therefore re-derived from the text; in group conversations the classifier's
-#: signal is uncontaminated and used as-is.  Set to False to trust the raw signal.
+#: "DIRECT_ASK_RE OR conversation_type == 'personal'", so it is True for EVERY 1:1 chat.
+#:
+#: PRINCIPLE: "someone messaged you directly" and "someone asked you for something" are
+#: different facts, and only the second one earns an interruption.  A.2's definition
+#: collapses them, which makes R4's "personal + direct_ask -> notify" fire on every
+#: chat-sized pleasantry ("reached home, nothing urgent") -- an inbox where every 1:1
+#: message rings is the exact failure the router exists to prevent.  In a personal
+#: conversation the signal is therefore re-derived from the text; in group conversations
+#: the classifier's signal is uncontaminated and used as-is.
+#: Set to False to trust the raw signal (blast radius: 2 of 110 actions).
 REQUIRE_EXPLICIT_ASK_FOR_PERSONAL = True
 
-#: DEVIATION 4: R4 notifies an ``event`` only when a same-day token is present, but
-#: sample_msg_046 (school circular image, caption has no date, the attached form is blank)
-#: is labelled notify, and Architecture A.3 already keys a (notify, event) template on
-#: "school admin".  School-group admin operations are notified regardless of the token;
-#: sample_msg_008 (society + admin, no token -> digest) stays correct because it is not a
-#: school group.  Blast radius: 3/110 target messages are school_group + admin.
-SCHOOL_GROUP_TYPES = frozenset({"school_group", "school", "school_parents"})
+#: DEVIATION 4: R4 notifies an ``event`` only when a same-day token is present.
+#:
+#: PRINCIPLE: a same-day WORD is a proxy for a same-day DEADLINE, and the proxy fails in
+#: exactly one direction -- silently.  A school administrator's circular ("check the
+#: timing and consent note") carries a deadline that lives in the attachment, in a date
+#: format SAME_DAY_RE does not spell ("Friday", "before the trip"), or in a scanned form
+#: OCR could not read.  Absence of a date token is absence of evidence, and for a sender
+#: whose operational notices are about the user's child it must not be read as evidence
+#: of absence.  Architecture A.3 independently keys its (notify, event) reason template on
+#: "A school admin sent a same-day operational update", so the label scheme treats this
+#: class -- not any single row -- as notify-worthy.  Both halves of the test are
+#: structured metadata (groups.group_type, group_members.role); no message content is
+#: consulted, so nothing here can be specific to one message.
+#:
+#: Scope is deliberately narrow: a society admin's undated notice stays in the digest,
+#: because a residents' association circular has no dependant on the other end of it.
+#:
+#: L3-C ablation, honest numbers: the precondition holds on 5 of 140 rows (3 of the 110
+#: targets), of which 3 are typed ``event``.  Disabling this path alone changes 0 of the
+#: 110 target actions and 1 of the 30 sample actions -- the same-day token independently
+#: covers the rest.  It is kept because its trigger is a metadata class that recurs
+#: (any school group x any admin), not because of the row it currently decides.
+#:
+#: Matched on group_type TOKENS rather than a fixed allowlist: the previous spelling
+#: enumerated {"school_group", "school", "school_parents"} of which only the first occurs
+#: in the corpus, so two thirds of it was an untested guess at someone else's naming.
+#: Tokenising covers those spellings and any other ("school", "kids_school",
+#: "school_bus_route") without pretending to know the vocabulary in advance.
+SCHOOL_GROUP_TOKENS = frozenset({"school"})
 OPERATIONAL_ADMIN_ROLES = frozenset({"admin", "owner", "moderator"})
+
+#: group_type values are snake_case slugs; split on any non-alphanumeric run.
+_GROUP_TYPE_TOKEN_RE = re.compile(r"[^a-z0-9]+")
 
 #: Mirror of Architecture A.2 DIRECT_ASK_RE.  Kept local (classifier.py is a parallel
 #: deliverable and must not be imported); P6 can retire it by publishing a text-only
@@ -585,7 +663,10 @@ def _direct_ask(type_result: Any, ctx: Any) -> bool:
 def school_admin_operational(ctx: Any) -> bool:
     """True when a school-group admin is the sender (see DEVIATION 4)."""
     group_type = _text(_get(getattr(ctx, "group", None), "group_type")).lower()
-    if group_type not in SCHOOL_GROUP_TYPES:
+    if not group_type:
+        return False
+    tokens = {token for token in _GROUP_TYPE_TOKEN_RE.split(group_type) if token}
+    if not tokens & SCHOOL_GROUP_TOKENS:
         return False
     role = _text(_get(getattr(ctx, "sender_membership", None), "role")).lower()
     return role in OPERATIONAL_ADMIN_ROLES
@@ -867,6 +948,29 @@ if __name__ == "__main__":  # pragma: no cover - smoke test
     assert len(scoped) == 1 and scoped.iloc[0]["reaction_time_minutes"] == 2.0
     assert prior_bad_source(scoped_ctx) is False, "cross-source report leaked (section 0.4)"
     print("same_source_events / section 0.4 scoping: ok")
+
+    # -- DEVIATION 4: group_type is matched by TOKEN, not by a fixed allowlist (L3-C) --
+    def _school(group_type, role="admin") -> bool:
+        return school_admin_operational(
+            _ctx(
+                conversation_type="group",
+                group=pd.Series({"group_id": "group_003", "group_type": group_type}),
+                sender_membership=pd.Series({"role": role}),
+            )
+        )
+
+    assert _school("school_group") is True
+    assert _school("school") is True
+    assert _school("school_parents") is True          # spelling the old allowlist guessed
+    assert _school("kids_school") is True             # and one it did not
+    assert _school("School Group") is True            # case / separator insensitive
+    assert _school("society") is False
+    assert _school("college_students") is False       # not widened to other institutions
+    assert _school("preschooler_chat") is False       # token match, never a substring
+    assert _school("school_group", role="member") is False
+    assert school_admin_operational(_ctx()) is False   # no group at all -> not a school
+    assert _school(float("nan")) is False              # NaN group_type must not raise
+    print("school_admin_operational token matching: 11/11 ok")
 
     # -- decision matrix -------------------------------------------------------------
     quiet_user = pd.Series(

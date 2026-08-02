@@ -1,0 +1,7 @@
+# Native Codex equivalent of the orchestration graph documented in CLAUDE.md.
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
+default_subagent_model = "gpt-5.6-terra"
+default_subagent_reasoning_effort = "medium"
+interrupt_message = true
